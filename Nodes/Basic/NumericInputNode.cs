@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
@@ -21,7 +21,7 @@ public unsafe class NumericInputNode : ComponentNode<AtkComponentNumericInput, A
 
         BackgroundNode = new SimpleNineGridNode {
             NodeId = 8,
-            Position = new Vector2(0.0f, 3.0f),
+            Position = new Vector2(0.0f, 2.0f),
             TexturePath = "ui/uld/NumericStepperB.tex",
             TextureCoordinates = new Vector2(56.0f, 0.0f),
             TextureSize = new Vector2(24.0f, 24.0f),
