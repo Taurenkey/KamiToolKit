@@ -17,6 +17,8 @@ public unsafe class TextButtonNodeSynth : ButtonBase {
             TextureSize = new Vector2(80.0f, 36.0f),
             LeftOffset = 20f,
             RightOffset = 20f,
+            TopOffset = 1f,
+            BottomOffset = 1f,
         };
         BackgroundNode.AttachNode(this);
 
@@ -51,7 +53,7 @@ public unsafe class TextButtonNodeSynth : ButtonBase {
     protected override void OnSizeChanged() {
         base.OnSizeChanged();
 
-        LabelNode.Size = new Vector2(Width - 32.0f, Height - 8.0f);
+        LabelNode.Size = new Vector2(Width - 32.0f, Height - 7.0f);
         BackgroundNode.Size = Size;
     }
 
