@@ -5,7 +5,6 @@ using KamiToolKit.Dalamud;
 namespace KamiToolKit;
 
 public partial class NativeAddon : IDisposable {
-
     private static readonly List<NativeAddon> CreatedAddons = [];
 
     private bool isDisposed;
@@ -33,7 +32,6 @@ public partial class NativeAddon : IDisposable {
         }
 
         isDisposed = true;
-        DisposeCloseCallback();
     }
 
     ~NativeAddon() => Dispose();

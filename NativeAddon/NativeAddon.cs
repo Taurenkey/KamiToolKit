@@ -1,8 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
@@ -12,17 +11,19 @@ using KamiToolKit.Timelines;
 
 namespace KamiToolKit;
 
+/// <summary>
+/// NativeAddon Partial containing internal and private functions for allocating and initialize addon states.
+/// </summary>
 public unsafe partial class NativeAddon {
-
     private GCHandle? disposeHandle;
-
     internal AtkUnitBase* InternalAddon;
-
-    public ResNode RootNode = null!;
 
     protected WindowNodeBase? WindowNode { get; private set; }
 
-    private void AllocateAddon() {
+    /// <summary>
+    /// Entry point for allocating custom addons. Allocates memory, replaces virtual table, allocates required nodes, and sets the GC Handle.
+    /// </summary>
+    private void AllocateAddon(uint atkValueCount = 0, AtkValue* atkValues = null) {
         if (InternalAddon is not null) {
             Services.Log.Warning("Tried to allocate addon that was already allocated.");
             return;
@@ -64,8 +65,23 @@ public unsafe partial class NativeAddon {
         InternalAddon->ShowSoundEffectId = (short)OpenWindowSoundEffectId;
 
         UpdateFlags();
+
+        disposeHandle = GCHandle.Alloc(this);
+
+        var localRef = InternalAddon;
+        using var nameString = new Utf8String(InternalName);
+
+        Experimental.InitializeAddonFunction?.Invoke(AtkStage.Instance()->RaptureAtkUnitManager, &localRef, nameString.StringPtr, atkValueCount, atkValues);
+
+        if (localRef is null) {
+            Dispose();
+            throw new Exception("Failed to initialize addon!");
+        }
     }
 
+    /// <summary>
+    /// Initializes data components of the addon to sane default values.
+    /// </summary>
     private void InitializeAddon() {
         var widgetInfo = NativeMemoryHelper.UiAlloc<AtkUldWidgetInfo>(1, 16);
         widgetInfo->Id = 1;
@@ -111,6 +127,9 @@ public unsafe partial class NativeAddon {
         CreatedAddons.Add(this);
     }
 
+    /// <summary>
+    /// Before the first OnSetup virtual function is invoked, set various fields such as open SFX, title, and initial position.
+    /// </summary>
     private void SetInitialState() {
         WindowNode?.SetTitle(Title.ToString(), Subtitle?.ToString() ?? KamiToolKitLibrary.DefaultWindowSubtitle);
 
@@ -141,61 +160,9 @@ public unsafe partial class NativeAddon {
         }
     }
 
-    public Func<WindowNodeBase>? CreateWindowNode { get; init; }
-
     /// <summary>
-    ///     Initializes and Opens this instance of Addon
+    /// Load timelines for WindowNode to properly show focused/unfocused state.
     /// </summary>
-    public void Open() => Services.Framework.RunOnFrameworkThread(() => {
-        Services.Log.Verbose($"[{InternalName}] Open Called");
-
-        if (InternalAddon is null) {
-            AllocateAddon();
-
-            if (InternalAddon is not null) {
-                AtkStage.Instance()->RaptureAtkUnitManager->InitializeAddon(InternalAddon, InternalName);
-                InternalAddon->Open((uint)DepthLayer - 1);
-                disposeHandle = GCHandle.Alloc(this);
-            }
-        }
-        else {
-            Services.Log.Verbose($"[{InternalName}] Already open, skipping call.");
-        }
-    });
-
-    [Conditional("DEBUG")]
-    public void DebugOpen() => Open();
-
-    public void Close() {
-        if (InternalAddon is null) return;
-
-        Services.Framework.RunOnFrameworkThread(() => {
-            Services.Log.Verbose($"[{InternalName}] Close");
-
-            if (InternalAddon is not null) {
-                InternalAddon->Close(false);
-            }
-        });
-    }
-
-    public void Toggle() {
-        if (IsOpen) {
-            Close();
-        }
-        else {
-            Open();
-        }
-    }
-
-    public void AddNode(ICollection<NodeBase> nodes) {
-        foreach (var node in nodes) {
-            AddNode(node);
-        }
-    }
-
-    public void AddNode(NodeBase? node)
-        => node?.AttachNode(this);
-
     private void LoadTimeline() {
         RootNode.AddTimeline(new TimelineBuilder()
             .BeginFrameSet(1, 89)
@@ -210,14 +177,5 @@ public unsafe partial class NativeAddon {
             .AddLabel(80, 109, AtkTimelineJumpBehavior.PlayOnce, 0)
             .EndFrameSet()
             .Build());
-    }
-
-    private Vector2 GetScreenClampedPosition(Vector2 position) {
-        if (!OpenInBounds) return position;
-        
-        var screenSize = (Vector2) AtkStage.Instance()->ScreenSize;
-        var clampedX = Math.Clamp(position.X, 0.0f, screenSize.X - Size.X);
-        var clampedY = Math.Clamp(position.Y, 0.0f, screenSize.Y - Size.Y);
-        return new Vector2(clampedX, clampedY);
     }
 }
