@@ -31,7 +31,7 @@ public unsafe class MapOverlayController : IDisposable {
     private MapMarkerNode? flagNode;
 
     public bool IsVisible { get; set; } = true;
-    
+
     public MapOverlayController() {
         mapController = new AddonController<AddonAreaMap> {
             AddonName = "AreaMap",
@@ -46,14 +46,14 @@ public unsafe class MapOverlayController : IDisposable {
     public void Dispose() {
         viewportEventListener?.Dispose();
         viewportEventListener = null;
-        
+
         mapController.Dispose();
 
         RemoveAllMarkers();
 
         overlayNode?.Dispose();
         overlayNode = null;
-        
+
         clippingContainerNode?.Dispose();
         clippingContainerNode = null;
     }
@@ -102,18 +102,14 @@ public unsafe class MapOverlayController : IDisposable {
         viewportEventListener = new ViewportEventListener(OnViewportEvent);
         viewportEventListener.AddEvent(AtkEventType.MouseMove, clippingContainerNode);
         viewportEventListener.AddEvent(AtkEventType.MouseDown, clippingContainerNode);
-        
+
         overlayNode = new SimpleOverlayNode();
         overlayNode.AttachNode(clippingContainerNode);
-        
+
         flagContainerNode = new SimpleOverlayNode();
         flagContainerNode.AttachNode(clippingContainerNode);
 
-        flagNode = new MapMarkerNode {
-            Size = new Vector2(32.0f, 32.0f),
-            IconId = 60561,
-            AllowAnyMap = true,
-        };
+        flagNode = new FlagMarkerNode();
         flagNode.AttachNode(flagContainerNode);
     }
 
@@ -122,12 +118,12 @@ public unsafe class MapOverlayController : IDisposable {
         if (overlayNode is null) return;
 
         var agentMap = AgentMap.Instance();
-        
+
         if (showingTooltip && agentMap->IsControlKeyPressed) {
             AtkStage.Instance()->TooltipManager.HideTooltip(addon->Id);
             showingTooltip = false;
         }
-        
+
         if (Services.ClientState.IsPvP) {
             clippingContainerNode.IsVisible = false;
             return;
@@ -170,7 +166,7 @@ public unsafe class MapOverlayController : IDisposable {
             marker.Scale = Vector2.One / new Vector2(areaMap.MarkerPositionScaling, areaMap.MarkerPositionScaling);
         }
 
-        UpdateFlagNode(agentMap, areaMap);
+        UpdateFlagNode(areaMap);
     }
 
     private void OnDetach(AddonAreaMap* addon) {
@@ -185,7 +181,7 @@ public unsafe class MapOverlayController : IDisposable {
 
         clippingContainerNode?.Dispose();
         clippingContainerNode = null;
-        
+
         overlayNode?.Dispose();
         overlayNode = null;
     }
@@ -203,7 +199,7 @@ public unsafe class MapOverlayController : IDisposable {
                 TextTooltip = markerInfo.Tooltip ?? string.Empty,
                 AllowAnyMap = markerInfo.AllowAnyMap,
             };
-    
+
             markerNodes.Add(newMarkerNode);
             newMarkerNode.AttachNode(overlayNode);
         }
@@ -216,7 +212,7 @@ public unsafe class MapOverlayController : IDisposable {
         queuedNodes.Clear();
     }
 
-    private void UpdateFlagNode(AgentMap* agentMap, Atk2DAreaMap areaMap) {
+    private void UpdateFlagNode(Atk2DAreaMap areaMap) {
         if (overlayNode is null) return;
 
         if (flagContainerNode is not null && flagNode is not null) {
@@ -224,12 +220,8 @@ public unsafe class MapOverlayController : IDisposable {
             flagContainerNode.Scale = overlayNode.Scale;
             flagContainerNode.Position = overlayNode.Position;
 
-            ref var flagMarker = ref agentMap->FlagMapMarkers[0];
-        
-            flagNode?.Position = new Vector2(flagMarker.XFloat, flagMarker.YFloat);
-            flagNode?.IsVisible = agentMap->FlagMarkerCount is not 0 && flagMarker.TerritoryId == agentMap->SelectedTerritoryId;
-            flagNode?.Update();
-            flagNode?.Scale = Vector2.One / new Vector2(areaMap.MarkerPositionScaling, areaMap.MarkerPositionScaling);
+            flagNode.Update();
+            flagNode.Scale = Vector2.One / new Vector2(areaMap.MarkerPositionScaling, areaMap.MarkerPositionScaling);
         }
     }
 
@@ -247,7 +239,7 @@ public unsafe class MapOverlayController : IDisposable {
 
     private void ProcessMouseMove(AtkEventData* atkEventData) {
         if (clippingContainerNode is null) return;
-        
+
         var mapAddon = RaptureAtkUnitManager.Instance()->GetAddonByName("AreaMap");
         if (mapAddon is null) return;
 

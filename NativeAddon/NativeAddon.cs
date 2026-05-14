@@ -50,7 +50,7 @@ public unsafe partial class NativeAddon {
         RegisterVirtualTable();
 
         RootNode = new ResNode {
-            NodeId = 1, 
+            NodeId = 1,
             NodeFlags = NodeFlags.Visible | NodeFlags.Enabled | NodeFlags.Fill | NodeFlags.Focusable | NodeFlags.EmitsEvents,
             IsAddonRootNode = true,
         };
@@ -71,7 +71,7 @@ public unsafe partial class NativeAddon {
         var localRef = InternalAddon;
         using var nameString = new Utf8String(InternalName);
 
-        Experimental.InitializeAddonFunction?.Invoke(AtkStage.Instance()->RaptureAtkUnitManager, &localRef, nameString.StringPtr, atkValueCount, atkValues);
+        AtkStage.Instance()->RaptureAtkUnitManager->InitializeAddon(&localRef, nameString.StringPtr, atkValueCount, atkValues);
 
         if (localRef is null) {
             Dispose();
@@ -88,8 +88,8 @@ public unsafe partial class NativeAddon {
         widgetInfo->NodeCount = 0;
         widgetInfo->NodeList = null;
         widgetInfo->WidgetAlignment = new AtkWidgetAlignment {
-            AlignmentType = AlignmentType.Center, 
-            X = 50.0f, 
+            AlignmentType = AlignmentType.Center,
+            X = 50.0f,
             Y = 50.0f,
         };
 
@@ -122,7 +122,7 @@ public unsafe partial class NativeAddon {
         // Set focus node to allow controller nav
         WindowNode?.WindowHeaderFocusNode.AddNodeFlags(NodeFlags.Focusable);
         InternalAddon->FocusNode = WindowNode is not null ? WindowNode.WindowHeaderFocusNode : RootNode;
-        
+
         // Now that we have constructed this instance, track it for auto-dispose
         CreatedAddons.Add(this);
     }
@@ -148,7 +148,7 @@ public unsafe partial class NativeAddon {
 
         if (addonConfig.Scale is not 1.0f) {
             var newScale = Math.Clamp(addonConfig.Scale, 0.25f, 6.0f);
-            
+
             InternalAddon->SetScale(newScale, true);
         }
 

@@ -5,21 +5,28 @@ using System.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Premade.Node.Simple;
+using Lumina.Text.ReadOnly;
 
 namespace KamiToolKit.Nodes;
 
 public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNode<T>, IListItemNode, new() {
     public readonly ScrollBarNode ScrollBarNode;
+    public readonly TextNode NoResultsTextNode;
 
     public ListNode() {
         itemHeight = TU.ItemHeight;
 
         ScrollBarNode = new ScrollBarNode {
             OnValueChanged = OnScrollUpdate,
-            ScrollSpeed = (int) itemHeight,
+            ScrollSpeed = (int)itemHeight,
             HideWhenDisabled = true,
         };
         ScrollBarNode.AttachNode(this);
+
+        NoResultsTextNode = new TextNode {
+            AlignmentType = AlignmentType.Center,
+        };
+        NoResultsTextNode.AttachNode(this);
 
         AddEvent(AtkEventType.MouseWheel, OnMouseWheel);
     }
@@ -30,17 +37,22 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
         ScrollBarNode.Size = new Vector2(8.0f, Height);
         ScrollBarNode.Position = new Vector2(Width - 8.0f, 0.0f);
 
+        NoResultsTextNode.Size = new Vector2(Width - 8.0f, Height);
+        NoResultsTextNode.Position = Vector2.Zero;
+
         var newNodeCount = (int)(Height / (itemHeight + ItemSpacing));
         if (newNodeCount != nodeCount) {
             FullRebuild();
         }
-        
+
         foreach (var node in nodeList) {
             node.Width = ScrollBarNode.Bounds.Left - 8.0f;
         }
 
         RecalculateScroll();
     }
+
+    public ReadOnlySeString? NoResultsString { get; set; }
 
     public Action<T?>? OnItemSelected { get; set; }
 
@@ -65,6 +77,14 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
                 PopulateNodes();
                 RecalculateScroll();
             }
+
+            if (NoResultsString is { } warningString && value.Count is 0) {
+                NoResultsTextNode.String = warningString;
+                NoResultsTextNode.IsVisible = true;
+            }
+            else {
+                NoResultsTextNode.IsVisible = false;
+            }
         }
     } = [];
 
@@ -82,7 +102,7 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
             node.Dispose();
         }
         nodeList.Clear();
-        
+
         scrollPosition = Math.Clamp(scrollPosition, 0, Math.Max(OptionsList.Count - nodeCount, 0));
         selectedItem = default;
 
@@ -93,7 +113,7 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
 
     public void Update() {
         PopulateNodes();
-        
+
         foreach (var node in nodeList) {
             if (node.IsVisible) {
                 node.Update();
@@ -117,14 +137,14 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
                 IsVisible = false,
             };
             node.AttachNode(this);
-            nodeList.Add(node); 
+            nodeList.Add(node);
         }
     }
 
     private void PopulateNodes() {
         foreach (var (nodeIndex, node) in nodeList.Index()) {
             var dataIndex = scrollPosition + nodeIndex;
-            
+
             if (dataIndex < OptionsList.Count) {
                 var item = OptionsList[dataIndex];
                 node.ItemData = item;
@@ -139,9 +159,9 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
 
     private void SelectItem(T? item) {
         if (item is null) return;
-        
+
         selectedItem = item;
-        
+
         foreach (var node in nodeList) {
             if (node.ItemData is null) {
                 node.IsSelected = false;
@@ -151,28 +171,34 @@ public unsafe class ListNode<T, TU> : SimpleComponentNode where TU : ListItemNod
             }
         }
     }
-    
+
+    public void ResetScroll() {
+        scrollPosition = 0;
+        ScrollBarNode.ScrollPosition = 0;
+        PopulateNodes();
+    }
+
     private void RecalculateScroll() {
         if (OptionsList.Count < nodeCount) {
             ScrollBarNode.ScrollPosition = 0;
             ScrollBarNode.IsEnabled = false;
         }
 
-        var totalHeight = (int)( OptionsList.Count * (itemHeight + ItemSpacing) + ItemSpacing);
-        ScrollBarNode.UpdateScrollParams((int) (nodeList.Count * (itemHeight + ItemSpacing)), totalHeight);
-        ScrollBarNode.ScrollPosition = (int)( scrollPosition * (itemHeight + ItemSpacing) );
+        var totalHeight = (int)(OptionsList.Count * (itemHeight + ItemSpacing) + ItemSpacing);
+        ScrollBarNode.UpdateScrollParams((int)(nodeList.Count * (itemHeight + ItemSpacing)), totalHeight);
+        ScrollBarNode.ScrollPosition = (int)(scrollPosition * (itemHeight + ItemSpacing));
     }
-    
+
     private void OnScrollUpdate(int newPosition) {
-        scrollPosition = (int)( newPosition / ( itemHeight + ItemSpacing ) );
+        scrollPosition = (int)(newPosition / (itemHeight + ItemSpacing));
         PopulateNodes();
     }
-    
+
     private void OnMouseWheel(AtkEventListener* thisPtr, AtkEventType eventType, int eventParam, AtkEvent* atkEvent, AtkEventData* atkEventData) {
         scrollPosition += atkEventData->IsScrollUp ? -1 : 1;
         scrollPosition = Math.Clamp(scrollPosition, 0, Math.Max(0, OptionsList.Count - nodeCount));
 
-        ScrollBarNode.ScrollPosition = (int)( scrollPosition * (itemHeight + ItemSpacing) );
+        ScrollBarNode.ScrollPosition = (int)(scrollPosition * (itemHeight + ItemSpacing));
         PopulateNodes();
 
         atkEvent->SetEventIsHandled();
