@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Game.Addon.Events;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -33,6 +34,8 @@ public unsafe class MapOverlayController : IDisposable {
     public bool IsVisible { get; set; } = true;
 
     public MapOverlayController() {
+        ThreadSafety.AssertMainThread();
+
         mapController = new AddonController<AddonAreaMap> {
             AddonName = "AreaMap",
             OnSetup = OnAttach,
@@ -44,6 +47,8 @@ public unsafe class MapOverlayController : IDisposable {
     }
 
     public void Dispose() {
+        ThreadSafety.AssertMainThread();
+
         viewportEventListener?.Dispose();
         viewportEventListener = null;
 

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
@@ -14,9 +14,6 @@ public abstract unsafe partial class NodeBase {
 
     internal readonly List<NodeBase> ChildNodes = [];
     private NodeBase? parentNode;
-
-    private readonly HashSet<string> addonsPendingUpdate = [];
-    private readonly HashSet<nint> uldManagersPendingUpdate = [];
 
     internal AtkUldManager* ParentUldManager { get; set; }
     internal AtkUnitBase* ParentAddon { get; private set; }
@@ -57,7 +54,7 @@ public abstract unsafe partial class NodeBase {
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
     private void PerformManagedAttach(NativeAddon? targetAddon, NodePosition targetPosition = NodePosition.AsLastChild) {
-        if (MainThreadSafety.TryAssertMainThread()) return;
+        ThreadSafety.AssertMainThread();
         if (targetAddon is null) return;
 
         // Check the Addon's node list to find out what NodeId we should be, and set that before attaching
@@ -72,7 +69,7 @@ public abstract unsafe partial class NodeBase {
     }
 
     private void PerformManagedAttach(NodeBase? targetNode, NodePosition targetPosition) {
-        if (MainThreadSafety.TryAssertMainThread()) return;
+        ThreadSafety.AssertMainThread();
         if (targetNode is null) return;
 
         PerformNativeAttach(targetNode, targetPosition);
@@ -82,7 +79,7 @@ public abstract unsafe partial class NodeBase {
     }
 
     private void PerformNativeAttach(AtkResNode* targetNode, NodePosition targetPosition) {
-        if (MainThreadSafety.TryAssertMainThread()) return;
+        ThreadSafety.AssertMainThread();
         if (targetNode is null) return;
 
         if (targetNode->GetNodeType() is NodeType.Component) {
@@ -152,7 +149,7 @@ public abstract unsafe partial class NodeBase {
     }
 
     public void DetachNode() {
-        if (MainThreadSafety.TryAssertMainThread()) return;
+        ThreadSafety.AssertMainThread();
         if (ResNode is null) return;
 
         UnlinkFromNative();
@@ -178,22 +175,8 @@ public abstract unsafe partial class NodeBase {
     private void RemoveParentAddonReferences() {
         if (ParentAddon is null) return;
 
-        var addonName = ParentAddon->NameString;
-
-        // Queue collision update for next frame
-        if (addonsPendingUpdate.Add(addonName)) {
-            Services.Framework.RunOnTick(() => {
-                if (Framework.Instance()->IsDestroying) return; // Game Unloading, don't try to refresh anything.
-
-                var currentInstance = RaptureAtkUnitManager.Instance()->GetAddonByName(addonName);
-                if (currentInstance is not null) {
-                    currentInstance->UldManager.UpdateDrawNodeList();
-                    currentInstance->UpdateCollisionNodeList(false);
-                }
-
-                addonsPendingUpdate.Remove(addonName);
-            });
-        }
+        ParentAddon->UldManager.UpdateDrawNodeList();
+        ParentAddon->UpdateCollisionNodeList(false);
 
         ParentAddon = null;
 
@@ -219,21 +202,11 @@ public abstract unsafe partial class NodeBase {
         }
 
         if (ParentUldManager is not null) {
-            // Queue UldManager update for next frame
-            var manager = ParentUldManager;
-
-            if (uldManagersPendingUpdate.Add((nint)ParentUldManager)) {
-                Services.Framework.RunOnTick(() => {
-                    if (Framework.Instance()->IsDestroying) return; // Game Unloading, don't try to refresh anything.
-                    if (ResNode is null) return;
-
-                    manager->AddNodeToObjectList(this);
-                    manager->SetupText();
-                    uldManagersPendingUpdate.Remove((nint)manager);
-                });
-            }
-
             ParentUldManager->AddNodeToObjectList(this);
+
+            if (this is TextNode { TextId: not 0 }) {
+                ParentUldManager->SetupText();
+            }
         }
 
         if (ParentAddon is not null) {
@@ -241,20 +214,8 @@ public abstract unsafe partial class NodeBase {
                 Services.Log.Warning("Warning, attaching to AddonNamePlate is not supported. Use OverlayController instead.");
             }
 
-            var addonName = ParentAddon->NameString;
-
-            // Queue collision update for next frame
-            if (addonsPendingUpdate.Add(addonName)) {
-                Services.Framework.RunOnTick(() => {
-                    var currentInstance = RaptureAtkUnitManager.Instance()->GetAddonByName(addonName);
-                    if (currentInstance is not null) {
-                        currentInstance->UldManager.UpdateDrawNodeList();
-                        currentInstance->UpdateCollisionNodeList(false);
-                    }
-
-                    addonsPendingUpdate.Remove(addonName);
-                });
-            }
+            ParentAddon->UldManager.UpdateDrawNodeList();
+            ParentAddon->UpdateCollisionNodeList(false);
         }
     }
 
