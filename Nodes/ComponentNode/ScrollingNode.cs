@@ -1,6 +1,8 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.BaseTypes;
+using KamiToolKit.Interfaces;
 
 namespace KamiToolKit.Nodes;
 
@@ -50,15 +52,29 @@ public class ScrollingNode<T> : ResNode where T : NodeBase, new() {
     }
 
     /// <summary>
+    /// Sets the scroll position to the top.
+    /// </summary>
+    public void ScrollToTop() {
+        ScrollBarNode.ScrollPosition = 0;
+    }
+
+    /// <summary>
+    /// Sets the scroll position to the bottom.
+    /// </summary>
+    public void ScrollToBottom() {
+        ScrollBarNode.ScrollPosition = ScrollBarNode.ScrollMaxPosition;
+    }
+
+    /// <summary>
     /// Recalculates sizes to update scroll params correctly.
     /// </summary>
     public void RecalculateSizes() {
-        if (ContentNode is LayoutListNode layoutNode) {
-            layoutNode.RecalculateLayout();
-        }
         OnSizeChanged();
     }
 
+    /// <summary>
+    /// Constructs a new <see cref="ScrollingNode{T}"/>.
+    /// </summary>
     public unsafe ScrollingNode() {
         ClippingContentNode = new ResNode {
             NodeFlags = NodeFlags.AnchorTop | NodeFlags.AnchorLeft |
@@ -113,6 +129,7 @@ public class ScrollingNode<T> : ResNode where T : NodeBase, new() {
         );
     }
 
+    /// <inheritdoc />
     protected override void OnSizeChanged() {
         base.OnSizeChanged();
 
@@ -120,8 +137,15 @@ public class ScrollingNode<T> : ResNode where T : NodeBase, new() {
         ClippingContentNode.Size = Size;
         ScrollingCollisionNode.Size = Size;
 
+        if (ContentNode is ILayoutListNode layoutNode) {
+            layoutNode.RecalculateLayout();
+        }
+
+        var oldPosition = ScrollBarNode.ScrollPosition;
+        ScrollBarNode.ScrollPosition = 0;
         ScrollBarNode.Size = new Vector2(8.0f, Height);
         ScrollBarNode.Position = new Vector2(Width - 8.0f, 0.0f);
         ScrollBarNode.SetContentNodes(ContentNode, ScrollingCollisionNode);
+        ScrollBarNode.ScrollPosition = Math.Clamp(oldPosition, 0, ScrollBarNode.ScrollMaxPosition);
     }
 }

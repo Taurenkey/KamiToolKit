@@ -50,6 +50,9 @@ public unsafe class AddonController<T> : IAddonEventController<T>, IDisposable w
     /// <inheritdoc/>
     public IAddonEventController<T>.AddonControllerEvent? OnPreUpdate { get; init; }
 
+    /// <inheritdoc />
+    public IAddonEventController<T>.AddonControllerEvent? OnDraw { get; init; }
+
     /// <inheritdoc/>
     public void Enable() {
         ThreadSafety.AssertMainThread();
@@ -71,6 +74,10 @@ public unsafe class AddonController<T> : IAddonEventController<T>, IDisposable w
 
         if (OnPreUpdate is not null) {
             Services.AddonLifecycle.RegisterListener(AddonEvent.PreUpdate, AddonName, OnAddonEvent);
+        }
+
+        if (OnDraw is not null) {
+            Services.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, AddonName, OnAddonEvent);
         }
 
         if (AddonPointer is not null) {
@@ -95,6 +102,7 @@ public unsafe class AddonController<T> : IAddonEventController<T>, IDisposable w
         IsEnabled = false;
     }
 
+    /// <inheritdoc/>
     public virtual void Dispose()
         => Disable();
 
@@ -126,6 +134,10 @@ public unsafe class AddonController<T> : IAddonEventController<T>, IDisposable w
 
             case AddonEvent.PostUpdate:
                 OnUpdate?.Invoke(addon);
+                return;
+
+            case AddonEvent.PreDraw:
+                OnDraw?.Invoke(addon);
                 return;
         }
     }

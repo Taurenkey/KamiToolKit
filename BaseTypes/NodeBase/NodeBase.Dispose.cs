@@ -25,6 +25,16 @@ public abstract unsafe partial class NodeBase : IDisposable {
     public static implicit operator AtkEventTarget*(NodeBase node) => &node.ResNode->AtkEventTarget;
 
     /// <summary>
+    /// Gets the list of all allocated nodes for this KamiToolKit instance.
+    /// </summary>
+    protected static List<NodeBase> CreatedNodes { get; } = [];
+
+    /// <summary>
+    /// Indicates whether this instance has already been disposed.
+    /// </summary>
+    protected bool IsDisposed { get; private set; }
+
+    /// <summary>
     /// Disposes this instance. Has double dispose guards.
     /// </summary>
     /// <remarks>
@@ -33,52 +43,52 @@ public abstract unsafe partial class NodeBase : IDisposable {
     public void Dispose() {
         try {
             logIndent++;
-            LogIndented($"Beginning Dispose for {GetType()}");
+            LogIndented($"Beginning Dispose for {GetType()}", true);
             logIndent++;
 
-            if (isDisposed) {
-                LogIndented("Node was already disposed, skipping.");
+            if (IsDisposed) {
+                LogIndented("Node was already disposed, skipping.", EnableFullLogging);
                 return;
             }
 
             if (Services.Framework.IsFrameworkUnloading) {
-                LogIndented("Game is shutting down, aborting manual dispose.");
+                LogIndented("Game is shutting down, aborting manual dispose.", EnableFullLogging);
                 return;
             }
 
             if (!ThreadSafety.IsMainThread) {
-                LogIndented($"{GetType()}'s Dispose must be called from the main thread.");
+                LogIndented($"{GetType()}'s Dispose must be called from the main thread.", EnableFullLogging);
                 return;
             }
 
-            isDisposed = true;
+            IsDisposed = true;
 
             if (!IsNodeValid()) {
                 Services.Log.Warning("Invalid node, dispose aborted.");
                 return;
             }
 
-            LogIndented("Disposing Children");
+            LogIndented("Disposing Children", EnableFullLogging);
             foreach (var child in ChildNodes.ToList()) {
                 child.Dispose();
             }
-            LogIndented("Children Disposed");
+            LogIndented("Children Disposed", EnableFullLogging);
             ChildNodes.Clear();
 
-            LogIndented("Disposing Tooltip Events");
+            LogIndented("Disposing Tooltip Events", EnableFullLogging);
             UnregisterTooltipEvents();
 
-            LogIndented("Clearing Native Focus");
+            LogIndented("Clearing Native Focus", EnableFullLogging);
             AtkStage.Instance()->ClearNodeFocus(ResNode);
 
-            LogIndented("Detaching From UI");
+            LogIndented("Detaching From UI", EnableFullLogging);
             DetachNode();
 
-            LogIndented("Disposing Timeline");
+            LogIndented("Disposing Timeline", EnableFullLogging);
             Timeline?.Dispose();
             ResNode->Timeline = null;
 
-            LogIndented("Invoking Native Dispose");
+            LogIndented("Invoking Native Dispose", EnableFullLogging);
             Dispose(true, false);
             GC.SuppressFinalize(this);
             CreatedNodes.Remove(this);
@@ -87,7 +97,7 @@ public abstract unsafe partial class NodeBase : IDisposable {
             Services.Log.Exception(e);
         } finally {
             logIndent--;
-            LogIndented("Dispose Complete");
+            LogIndented("Dispose Complete", true);
             logIndent--;
         }
     }
@@ -98,19 +108,18 @@ public abstract unsafe partial class NodeBase : IDisposable {
     internal abstract AtkResNode* ResNode { get; }
     internal bool IsAddonRootNode;
 
-    protected static readonly List<NodeBase> CreatedNodes = [];
-
     private static int logIndent = -1;
-
-    private bool isDisposed;
 
     private AtkResNode.Delegates.Destroy destroyFunction = null!;
 
     private AtkResNode.AtkResNodeVirtualTable* originalVirtualTable;
     private AtkResNode.AtkResNodeVirtualTable* modifiedVirtualTable;
 
-    private static void LogIndented(string message)
-        => Services.Log.Verbose(new string(' ', logIndent * 2) + message);
+    private static void LogIndented(string message, bool enableLogging) {
+        if (!enableLogging) return;
+
+        Services.Log.Verbose(new string(' ', logIndent * 2) + message);
+    }
 
     internal static void WarnLeakedNodes() {
         var leakedNodeCount = CreatedNodes.Count(node => !node.IsAddonRootNode && node.ResNode is not null && node.ResNode->ParentNode is null);
@@ -142,7 +151,13 @@ public abstract unsafe partial class NodeBase : IDisposable {
         }
     }
 
-    ~NodeBase() => Dispose(false, false);
+    /// <summary>
+    /// Finalizer invocation from GC, this shouldn't be called unless a node was leaked and then not cleaned up by <see cref="KamiToolKitLibrary.Dispose"/>
+    /// </summary>
+    ~NodeBase() {
+        Services.Log.Warning($"Leaked node detected via finalizer, disposing {GetType()}");
+        Dispose();
+    }
 
     /// <summary>
     /// Dispose associated resources. If a resource modifies native state directly guard it with isNativeDestructor
@@ -171,12 +186,15 @@ public abstract unsafe partial class NodeBase : IDisposable {
         return true;
     }
 
+    /// <summary>
+    /// Replaces the nodes entire virtual table to ensure that C#'s managed space gets notified of the games unmanaged node dtor.
+    /// </summary>
     protected void BuildVirtualTable() {
         // Back up original destructor pointer
         originalVirtualTable = ResNode->VirtualTable;
 
         // Overwrite virtual table with a custom copy,
-        // Note: Currently there are only 2 vfuncs, but there's no harm in copying more for if they ever add more vfuncs to the game.
+        // Note: Currently there are only 2 virtual functions, but there's no harm in copying more for if they ever add more vfuncs to the game.
         modifiedVirtualTable = (AtkResNode.AtkResNodeVirtualTable*)NativeMemoryHelper.Malloc(0x8 * 4);
         NativeMemory.Copy(ResNode->VirtualTable, modifiedVirtualTable, 0x8 * 4);
         ResNode->VirtualTable = modifiedVirtualTable;
@@ -188,6 +206,9 @@ public abstract unsafe partial class NodeBase : IDisposable {
         modifiedVirtualTable->Destroy = (delegate* unmanaged<AtkResNode*, bool, void>)Marshal.GetFunctionPointerForDelegate(destroyFunction);
     }
 
+    /// <summary>
+    /// Pinned managed function that is used to replace the native virtual tables dtor function pointer.
+    /// </summary>
     protected void Destroy(AtkResNode* thisPtr, bool free) {
         Dispose(true, true);
 
@@ -200,10 +221,16 @@ public abstract unsafe partial class NodeBase : IDisposable {
         GC.SuppressFinalize(this);
         CreatedNodes.Remove(this);
 
-        isDisposed = true;
+        IsDisposed = true;
     }
 
     // To be invoked from NodeBase.Dispose(bool, bool).
+    /// <summary>
+    /// Invokes the original games destroy function without calling back to the native disposal method.
+    /// </summary>
+    /// <remarks>
+    /// This is intended to be used from <see cref="NodeBase"/> after the managed disposal functions have been invoked.
+    /// </remarks>
     protected void OriginalDestroy(AtkResNode* thisPtr, bool free) {
         originalVirtualTable->Destroy(thisPtr, free);
 
@@ -213,6 +240,11 @@ public abstract unsafe partial class NodeBase : IDisposable {
         GC.SuppressFinalize(this);
         CreatedNodes.Remove(this);
 
-        isDisposed = true;
+        IsDisposed = true;
     }
+
+    /// <summary>
+    /// When true, enables hyper verbose node disposal logging.
+    /// </summary>
+    private static bool EnableFullLogging => true;
 }

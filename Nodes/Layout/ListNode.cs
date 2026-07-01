@@ -164,7 +164,7 @@ public unsafe class ListNode<T, TU> : ResNode, IControllerNavigable where TU : L
     }
 
     /// <summary>
-    /// Updates the data being displayed. This is done efficiently.
+    /// Updates the data being displayed.
     /// </summary>
     public void Update() {
         NoResultsTextNodeContainer.IsVisible = !NoResultsTextNode.String.IsEmpty && OptionsList.Count is 0;
@@ -219,6 +219,9 @@ public unsafe class ListNode<T, TU> : ResNode, IControllerNavigable where TU : L
         RecalculateScroll();
     }
 
+    /// <summary>
+    /// Constructs a new <see cref="ListNode{T, TU}"/>
+    /// </summary>
     public ListNode() {
         itemHeight = TU.ItemHeight;
 
@@ -244,6 +247,7 @@ public unsafe class ListNode<T, TU> : ResNode, IControllerNavigable where TU : L
         AddEvent(AtkEventType.MouseWheel, OnMouseWheel);
     }
 
+    /// <inheritdoc />
     protected override void OnSizeChanged() {
         base.OnSizeChanged();
 
@@ -376,6 +380,10 @@ public unsafe class ListNode<T, TU> : ResNode, IControllerNavigable where TU : L
     private void OnScrollUpdate(int newPosition) {
         scrollPosition = (int)(newPosition / (itemHeight + ItemSpacing));
         PopulateNodes();
+
+        if (ParentAddon is not null) {
+            ParentAddon->UpdateCollisionNodeList(false);
+        }
     }
 
     private void OnMouseWheel(AtkEventListener* thisPtr, AtkEventType eventType, int eventParam, AtkEvent* atkEvent, AtkEventData* atkEventData) {
@@ -384,6 +392,10 @@ public unsafe class ListNode<T, TU> : ResNode, IControllerNavigable where TU : L
 
         ScrollBarNode.ScrollPosition = (int)(scrollPosition * (itemHeight + ItemSpacing));
         PopulateNodes();
+
+        if (ParentAddon is not null) {
+            ParentAddon->UpdateCollisionNodeList(false);
+        }
 
         atkEvent->SetEventIsHandled();
     }

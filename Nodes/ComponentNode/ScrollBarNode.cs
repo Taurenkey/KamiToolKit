@@ -27,11 +27,17 @@ public unsafe class ScrollBarNode : ComponentNode<AtkComponentScrollBar, AtkUldC
     public Action<int>? OnValueChanged { get; set; }
 
     /// <summary>
+    /// Gets the maximum valid scroll position for the current content.
+    /// </summary>
+    public int ScrollMaxPosition
+        => Component->ScrollMaxPosition;
+
+    /// <summary>
     /// Gets or sets the current scroll position, triggering the component to update.
     /// </summary>
-    public int ScrollPosition {
+    public float ScrollPosition {
         get => Component->ScrollPosition;
-        set => Component->SetScrollPosition(value);
+        set => Component->SetScrollPosition((int) value);
     }
 
     /// <summary>
@@ -77,6 +83,12 @@ public unsafe class ScrollBarNode : ComponentNode<AtkComponentScrollBar, AtkUldC
     }
 
     /// <summary>
+    /// <inheritdoc cref="UpdateScrollParams(int, int)"/>
+    /// </summary>
+    public void UpdateScrollParams(float barHeight, float offscreenHeight)
+        => UpdateScrollParams((int) barHeight, (int) offscreenHeight);
+
+    /// <summary>
     /// Update the scroll bars size and positioning based on manually input values.
     /// It's recommend to use <see cref="UpdateScrollParams()"/> instead, if the content node is sized correctly.
     /// </summary>
@@ -113,6 +125,9 @@ public unsafe class ScrollBarNode : ComponentNode<AtkComponentScrollBar, AtkUldC
         }
     }
 
+    /// <summary>
+    /// Constructs a new <see cref="ScrollBarNode"/>.
+    /// </summary>
     public ScrollBarNode() {
         SetInternalComponentType(ComponentType.ScrollBar);
 
@@ -142,6 +157,7 @@ public unsafe class ScrollBarNode : ComponentNode<AtkComponentScrollBar, AtkUldC
         AddEvent(AtkEventType.ValueUpdate, UpdateHandler);
     }
 
+    /// <inheritdoc />
     protected override void OnSizeChanged() {
         base.OnSizeChanged();
 

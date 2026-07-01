@@ -34,14 +34,18 @@ public unsafe class ClippingMaskNode : NodeBase<AtkClippingMaskNode> {
     public void AddPart(params Part[] parts)
         => PartsList.Add(parts);
 
+    /// <summary>
+    /// Constructs a <see cref="ClippingMaskNode"/> instance.
+    /// </summary>
     public ClippingMaskNode() : base(NodeType.ClippingMask) {
         PartsList = new PartsList();
 
         Node->PartsList = PartsList.InternalPartsList;
     }
 
+    /// <inheritdoc />
     protected override void Dispose(bool disposing, bool isNativeDestructor) {
-        if (disposing) {
+        if (disposing && !IsDisposed) {
             if (!isNativeDestructor) {
                 PartsList.Dispose();
                 Node->PartsList = null;

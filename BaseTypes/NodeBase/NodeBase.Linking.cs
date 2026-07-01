@@ -12,45 +12,60 @@ namespace KamiToolKit.BaseTypes;
 
 public abstract unsafe partial class NodeBase {
 
+    /// <summary>
+    /// Attaches this node to targetAddon's root node using targetPosition as the relative positioning.
+    /// </summary>
     [OverloadResolutionPriority(1)]
     public void AttachNode(NativeAddon? targetAddon, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformManagedAttach(targetAddon, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NativeAddon?, NodePosition)"/>
     public void AttachNode(AtkUnitBase* targetAddon, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach(targetAddon is not null ? targetAddon->RootNode : null, targetPosition);
 
+    /// <summary>
+    /// Attaches this node to the targetNode node using targetPosition to determine where to insert the node relatively.
+    /// </summary>
     [OverloadResolutionPriority(1)]
     public void AttachNode(NodeBase? targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformManagedAttach(targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkResNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach(targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkImageNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkTextNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkNineGridNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkCounterNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkCollisionNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkClippingMaskNode* targetNode, NodePosition targetPosition = NodePosition.AsLastChild)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
+    /// <inheritdoc cref="AttachNode(NodeBase?, NodePosition)"/>
     public void AttachNode(AtkComponentNode* targetNode, NodePosition targetPosition = NodePosition.AfterAllSiblings)
         => PerformNativeAttach((AtkResNode*)targetNode, targetPosition);
 
     /// <summary>
     /// Detaches this node from the current tree, and removes native references to it.
     /// This is only intended to be used for very specific use cases.
-    /// Generally speaking you probably want <see cref="Dispose"/> instead.
+    /// Generally speaking you probably want "Dispose" instead.
     /// </summary>
     /// <remarks>
     /// <em>Do not call this immediately before calling dispose!</em>
@@ -76,6 +91,11 @@ public abstract unsafe partial class NodeBase {
     }
 
     private void PerformManagedAttach(NodeBase? targetNode, NodePosition targetPosition) {
+        if (this == targetNode) {
+            Services.Log.Warning("Attempted to attach self to self, attach was aborted.");
+            return;
+        }
+
         ThreadSafety.AssertMainThread();
         if (targetNode is null) return;
 
@@ -86,6 +106,11 @@ public abstract unsafe partial class NodeBase {
     }
 
     private void PerformNativeAttach(AtkResNode* targetNode, NodePosition targetPosition) {
+        if (ResNode == targetNode) {
+            Services.Log.Warning("Attempted to attach self to self, attach was aborted.");
+            return;
+        }
+
         ThreadSafety.AssertMainThread();
         if (targetNode is null) return;
 
@@ -122,6 +147,11 @@ public abstract unsafe partial class NodeBase {
     }
 
     internal void ReattachNode(AtkResNode* newTarget) {
+        if (ResNode == newTarget) {
+            Services.Log.Warning("Attempted to attach self to self, attach was aborted.");
+            return;
+        }
+
         if (newTarget is null) return;
 
         DetachNode();
@@ -136,14 +166,34 @@ public abstract unsafe partial class NodeBase {
     }
 
     private void RemoveUldManagerObjectReferences() {
+        // If UldManager is null, try again to get the UldManager.
+        if (ParentUldManager is null) {
+            ParentUldManager = GetUldManagerForNode(this);
+        }
+
+        // If we still can't get it, it doesn't exist.
         if (ParentUldManager is null) return;
 
+        // Remove this node and all children from the UldManager's Objects List
         ParentUldManager->RemoveNodeFromObjectList(this);
         ParentUldManager = null;
     }
 
     private void RemoveParentAddonReferences() {
-        if (ParentAddon is null) return;
+        // If ParentAddon is null, try again to get it from RaptureAtkUnitManager
+        if (ParentAddon is null) {
+            ParentAddon = RaptureAtkUnitManager.Instance()->GetAddonByNode(this);
+        }
+
+        // If it's still null, then it doesn't exist.
+        if (ParentAddon is null) {
+
+            // Ensure the children also know that they have no parents.
+            foreach (var child in GetAllChildren(this)) {
+                child.ParentAddon = null;
+            }
+            return;
+        }
 
         ParentAddon->UldManager.UpdateDrawNodeList();
         ParentAddon->UpdateCollisionNodeList(false);
@@ -165,10 +215,12 @@ public abstract unsafe partial class NodeBase {
     private void UpdateNative() {
         if (ResNode is null) return;
 
+        // Set this node and all children to dirty to have the
+        // game recalc their visible location.
         MarkDirty();
 
         if (ParentUldManager is null) {
-            ParentUldManager = GetUldManagerForNode(ResNode);
+            ParentUldManager = GetUldManagerForNode(this);
         }
 
         if (ParentUldManager is not null) {
@@ -227,6 +279,10 @@ public abstract unsafe partial class NodeBase {
         }
 
         // We failed to find a parent component, try to get a parent addon instead
+        if (ParentAddon is null) {
+            ParentAddon = RaptureAtkUnitManager.Instance()->GetAddonByNode(node);
+        }
+
         if (ParentAddon is not null) {
             return &ParentAddon->UldManager;
         }

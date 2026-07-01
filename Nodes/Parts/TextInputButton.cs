@@ -8,7 +8,7 @@ using KamiToolKit.Timelines;
 namespace KamiToolKit.Nodes;
 
 /// <summary>
-/// Specialization of a button for use in <see cref="TextButtonListNode"/>.
+/// Specialization of a button for use in <see cref="TextInputSelectionListNode"/>.
 /// Not intended for external use.
 /// </summary>
 public unsafe class TextInputButtonNode : ButtonBase {
@@ -23,6 +23,9 @@ public unsafe class TextInputButtonNode : ButtonBase {
     /// </summary>
     public TextNode LabelNode { get; }
 
+    /// <summary>
+    /// Constructs a new <see cref="TextInputButtonNode"/>
+    /// </summary>
     public TextInputButtonNode() {
         BackgroundNode = new SimpleNineGridNode {
             Size = new Vector2(160.0f, 24.0f),

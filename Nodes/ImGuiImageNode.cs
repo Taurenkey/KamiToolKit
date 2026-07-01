@@ -79,8 +79,9 @@ public class ImGuiImageNode : SimpleImageNode {
         LoadedTexture = texture;
     }
 
+    /// <inheritdoc />
     protected override void Dispose(bool disposing, bool isNativeDestructor) {
-        if (disposing) {
+        if (disposing && !IsDisposed) {
             base.Dispose(disposing, isNativeDestructor);
 
             if (LoadedTexture is not null) {
